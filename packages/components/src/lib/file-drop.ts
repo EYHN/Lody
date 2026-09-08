@@ -1,3 +1,5 @@
+import { SESSION_IMAGE_ALLOWED_MIME_TYPES } from '@lody/shared';
+
 type FileTransferItem = Pick<DataTransferItem, 'kind' | 'getAsFile'> & {
   /** Chromium/WebKit only; jsdom and older engines have no entry API. */
   webkitGetAsEntry?: () => Pick<FileSystemEntry, 'isDirectory'> | null;
@@ -7,6 +9,10 @@ type FileDropDataTransfer = {
   items?: ArrayLike<FileTransferItem> | Iterable<FileTransferItem>;
   files?: ArrayLike<File> | Iterable<File>;
 };
+
+const supportedImageMimeTypes = new Set<string>(SESSION_IMAGE_ALLOWED_MIME_TYPES);
+const isSupportedImage = (file: File): boolean =>
+  supportedImageMimeTypes.has(file.type.trim().toLowerCase());
 
 /**
  * What one OS drop carried, split by what the app can do with each part.
@@ -62,7 +68,11 @@ export const readDroppedTransfer = (
 
 export const splitImageAndFileAttachments = (
   files: File[]
-): { images: File[]; attachments: File[] } => ({
-  images: files.filter((file) => file.type.startsWith('image/')),
-  attachments: files.filter((file) => !file.type.startsWith('image/')),
-});
+): { images: File[]; attachments: File[] } => {
+  return {
+    images: files.filter(isSupportedImage),
+    // Image MIME types unsupported by the image upload path (for example
+    // SVG) remain valid general file attachments instead of being rejected.
+    attachments: files.filter((file) => !isSupportedImage(file)),
+  };
+};

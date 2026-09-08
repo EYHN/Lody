@@ -36,6 +36,8 @@ import {
   buildAskUserQuestionElicitationResponse,
   formatMcpResolutionProblem,
   getServerNow,
+  ACP_INIT_TIMEOUT_MS as DEFAULT_ACP_INIT_TIMEOUT_MS,
+  ACP_NEW_SESSION_TIMEOUT_MS as DEFAULT_ACP_NEW_SESSION_TIMEOUT_MS,
 } from '@lody/shared';
 import { getLocalControlSocketPath } from '@lody/shared/node/local-ipc';
 import { getLodyMcpHttpEndpoint } from '@/mcp/lody-mcp-http-server';
@@ -73,6 +75,7 @@ import {
 } from './acknowledged-steer';
 import type { SessionMcpCatalogSelector } from './session-mcp-resolver';
 import {
+  getBuiltinToolPermissionOutcome,
   parseLodyExtensionCapabilities,
   parseLodyExtensionMessage,
   parseRateLimitsSnapshot,
@@ -645,6 +648,7 @@ export class AgentClient implements acp.Client {
   private agentMcpCapabilities: acp.McpCapabilities | undefined;
   /** Session config options returned by the agent; the source of model/mode choices and names. */
   private configOptions: acp.SessionConfigOption[] = [];
+  private readonly configOptionsListeners = new Set<() => void>();
   /** Desired config retained across same-client replacement sessions. */
   private readonly configOptionValues: NonNullable<SessionTurnInputConfig['configOptionValues']>;
   /** Legacy top-level `models` state proves that `session/set_model` is supported. */
@@ -1648,6 +1652,7 @@ export class AgentClient implements acp.Client {
     } else {
       this.currentModel = undefined;
     }
+    for (const listener of this.configOptionsListeners) listener();
   }
 
   private retainLegacyConfigOptionValue(configId: string, value: AcpConfigOptionValue): void {
@@ -1662,6 +1667,7 @@ export class AgentClient implements acp.Client {
       }
       return option;
     });
+    for (const listener of this.configOptionsListeners) listener();
   }
 
   async startSession(
@@ -1718,7 +1724,10 @@ export class AgentClient implements acp.Client {
     // connection.initialize() internally spawns the CLI process and waits for it to respond.
     // Missing dependencies or local runtime issues can hang this operation indefinitely.
     // Apply a hard timeout so startup fails fast.
-    const ACP_INIT_TIMEOUT_MS = Math.max(0, timeoutOptions.initTimeoutMs ?? 120_000); // 2 minutes default
+    const ACP_INIT_TIMEOUT_MS = Math.max(
+      0,
+      timeoutOptions.initTimeoutMs ?? DEFAULT_ACP_INIT_TIMEOUT_MS
+    );
 
     let initResponse: acp.InitializeResponse;
     try {
@@ -2067,7 +2076,10 @@ export class AgentClient implements acp.Client {
       // 2. Start the internal query system which spawns another subprocess
       // 3. Call query.supportedModels() and query.supportedCommands()
       // Any of these can hang due to runtime/environment issues. Apply a hard timeout.
-      const ACP_NEW_SESSION_TIMEOUT_MS = Math.max(0, timeoutOptions.newSessionTimeoutMs ?? 120_000); // 2 minutes default
+      const ACP_NEW_SESSION_TIMEOUT_MS = Math.max(
+        0,
+        timeoutOptions.newSessionTimeoutMs ?? DEFAULT_ACP_NEW_SESSION_TIMEOUT_MS
+      );
 
       try {
         sessionResponse = await withTimeout(
@@ -2549,6 +2561,26 @@ export class AgentClient implements acp.Client {
   /** Returns the config options currently known for this session. */
   getConfigOptions(): acp.SessionConfigOption[] {
     return this.configOptions;
+  }
+
+  subscribeConfigOptions(listener: () => void): () => void {
+    this.configOptionsListeners.add(listener);
+    return () => {
+      this.configOptionsListeners.delete(listener);
+    };
+  }
+
+  getAutomaticToolPermissionOutcome(
+    request: acp.RequestPermissionRequest,
+    pending: boolean
+  ): acp.RequestPermissionResponse['outcome'] | undefined {
+    if (request.sessionId !== this.acpSessionId) return undefined;
+    return getBuiltinToolPermissionOutcome({
+      agentConfig: this.options.agentConfig,
+      configOptions: this.configOptions,
+      request,
+      pending,
+    });
   }
 
   /**
