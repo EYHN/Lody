@@ -96,7 +96,7 @@ describe('inserting a path mention from outside the composer', () => {
   async function insert(path: string) {
     let inserted = false;
     await act(async () => {
-      inserted = handle?.insertPathMention({ path, kind: 'dir' }) ?? false;
+      inserted = handle?.insertPathMentions([{ path, kind: 'dir' }]) ?? false;
     });
     await render(value);
     return inserted;
@@ -121,9 +121,57 @@ describe('inserting a path mention from outside the composer', () => {
     ]);
   });
 
+  it.each(['/', 'C:/'])('preserves the absolute root %s', async (path) => {
+    await render('look at');
+    expect(await insert(path)).toBe(true);
+    expect(value).toBe(`look at @${path} `);
+    expect(ranges).toEqual([{ value: path, start: 8, end: 9 + path.length, kind: 'dir' }]);
+  });
+
+  it('keeps every folder and existing range from a single drop', async () => {
+    await render('look at');
+    await insert('/existing');
+    await act(async () => {
+      handle?.insertPathMentions([
+        { path: '/first', kind: 'dir' },
+        { path: '/second folder', kind: 'dir' },
+      ]);
+    });
+    await render(value);
+    expect(value).toBe('look at @/existing @/first @/second folder ');
+    const input = container.querySelector('textarea')!;
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(value.length);
+    expect(input.selectionEnd).toBe(value.length);
+    expect(
+      ranges.map((range) => ({
+        text: value.slice(range.start, range.end),
+        value: range.value,
+        kind: range.kind,
+      }))
+    ).toEqual([
+      { text: '@/existing', value: '/existing/', kind: 'dir' },
+      { text: '@/first', value: '/first/', kind: 'dir' },
+      { text: '@/second folder', value: '/second folder/', kind: 'dir' },
+    ]);
+  });
+
+  it('leaves the draft and ranges intact for an empty batch', async () => {
+    await render('look at');
+    await insert('/existing');
+    const previousRanges = ranges;
+    let inserted = true;
+    await act(async () => {
+      inserted = handle?.insertPathMentions([]) ?? true;
+    });
+    expect(inserted).toBe(false);
+    expect(value).toBe('look at @/existing ');
+    expect(ranges).toEqual(previousRanges);
+  });
+
   it('writes nothing for an empty path', async () => {
     await render('hello');
-    expect(await insert('/')).toBe(false);
+    expect(await insert('')).toBe(false);
     expect(value).toBe('hello');
     expect(ranges).toHaveLength(0);
   });

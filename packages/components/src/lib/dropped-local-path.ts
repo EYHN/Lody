@@ -31,7 +31,7 @@ export function getDroppedFileLocalPath(file: File): string | null {
 }
 
 export type PathMentionInsertion = {
-  /** Absolute, forward-slash, no trailing slash. */
+  /** Absolute, forward-slash; only filesystem roots retain a trailing slash. */
   path: string;
   kind: 'dir' | 'file';
 };
@@ -47,6 +47,7 @@ export function toPathMentionInsertion(
   kind: PathMentionInsertion['kind']
 ): PathMentionInsertion {
   const forward = absolutePath.replace(/\\/g, '/');
+  if (/^[a-z]:\/+$/i.test(forward)) return { path: `${forward.slice(0, 2)}/`, kind };
   const trimmed = forward.replace(/\/+$/, '');
   // Keep a bare filesystem root (`/`) rather than collapsing it to nothing.
   return { path: trimmed || (forward.startsWith('/') ? '/' : forward), kind };

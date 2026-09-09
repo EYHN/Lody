@@ -1675,11 +1675,11 @@ export const SessionChatInputArea = memo(
         if (isArchived) {
           return;
         }
-        for (const directory of directories) {
+        const insertions = directories.flatMap((directory) => {
           const localPath = getDroppedFileLocalPath(directory);
-          if (!localPath) continue;
-          mentionActionsRef.current?.insertPathMention(toPathMentionInsertion(localPath, 'dir'));
-        }
+          return localPath ? [toPathMentionInsertion(localPath, 'dir')] : [];
+        });
+        mentionActionsRef.current?.insertPathMentions(insertions);
       },
       [isArchived]
     );

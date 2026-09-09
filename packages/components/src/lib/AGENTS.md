@@ -92,8 +92,9 @@ Rationale: [components](../../../../.agents/docs/components-package.md) and
   `webkitGetAsEntry().isDirectory`; a folder is never an upload candidate.
   `dropped-local-path.ts` is the ONE path bridge (Electron
   `webUtils.getPathForFile`, absolute, forward-slash); web/mobile have no path,
-  so a directory drop inserts nothing. Each path becomes a `@dir` mention via
-  `mentionActionsRef.insertPathMention` — a committed range, never bare text.
+  so a directory drop inserts nothing. A drop commits all paths together via
+  `mentionActionsRef.insertPathMentions`, with one `dir` range per path. Preserve
+  POSIX and Windows drive roots (`/`, `C:/`) during normalization and insertion.
 
 ## ACP dispatch
 

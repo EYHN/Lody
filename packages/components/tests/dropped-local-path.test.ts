@@ -26,6 +26,10 @@ describe('toPathMentionInsertion', () => {
     expect(toPathMentionInsertion('/', 'dir')).toEqual({ path: '/', kind: 'dir' });
   });
 
+  it.each(['C:/', 'C:\\', 'C:////'])('preserves Windows drive root %s', (path) => {
+    expect(toPathMentionInsertion(path, 'dir')).toEqual({ path: 'C:/', kind: 'dir' });
+  });
+
   it('normalizes Windows separators', () => {
     expect(toPathMentionInsertion('C:\\Users\\dev\\lody\\src\\ui\\', 'dir')).toEqual({
       path: 'C:/Users/dev/lody/src/ui',

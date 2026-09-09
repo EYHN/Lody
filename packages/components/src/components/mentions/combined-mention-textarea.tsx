@@ -30,7 +30,7 @@ import {
   type AgentRoleMentionItem,
 } from '@/components/mentions/mention-agent-role-source';
 import { applyAgentRoleEmojiChip } from '@/components/mentions/mention-chips';
-import type { PathMentionInsertion } from '@/lib/dropped-local-path';
+import { toPathMentionInsertion, type PathMentionInsertion } from '@/lib/dropped-local-path';
 import { useMentionHydration } from '@/components/mentions/mention-hydration';
 import {
   sanitizeMentionRanges,
@@ -504,12 +504,12 @@ export type CombinedMentionTextareaHandle = {
    */
   insertSessionMention: (sessionId: string) => boolean;
   /**
-   * Append a `@path` mention for a path that did not come from the menu — a
-   * folder dropped from the OS. Same artefact a menu commit writes: the text
-   * and a committed range, so the chip and the before-send rewrite both see it.
-   * Returns false when the path is empty.
+   * Append `@path` mentions in one transaction for paths outside the menu —
+   * folders dropped from the OS. Each writes text plus a committed range,
+   * so chips and the before-send rewrite see the same artefact as a menu commit.
+   * Returns false when every path is empty.
    */
-  insertPathMention: (insertion: PathMentionInsertion) => boolean;
+  insertPathMentions: (insertions: PathMentionInsertion[]) => boolean;
 };
 
 /**
@@ -540,18 +540,22 @@ function MentionActionsBridge({
         onMentionInsert(insertion);
         return true;
       },
-      insertPathMention: ({ path, kind }) => {
-        const token = path.replace(/\/+$/, '');
-        if (!token) return false;
-        // Mirrors `toFileCandidate`: a directory commits as `@src/components`
-        // while its payload keeps the trailing slash the file index uses.
-        onMentionInsert({
-          text: `${MENTION_TRIGGER}${token}`,
-          value: kind === 'dir' ? `${token}/` : token,
-          kind,
-          separate: true,
-          suffix: ' ',
+      insertPathMentions: (insertions) => {
+        const requests = insertions.flatMap(({ path, kind }) => {
+          const token = toPathMentionInsertion(path, kind).path;
+          if (!token) return [];
+          return [
+            {
+              text: `${MENTION_TRIGGER}${token}`,
+              value: kind === 'dir' && !token.endsWith('/') ? `${token}/` : token,
+              kind,
+              separate: true,
+              suffix: ' ',
+            },
+          ];
         });
+        if (requests.length === 0) return false;
+        onMentionInsert(requests);
         return true;
       },
     }),
