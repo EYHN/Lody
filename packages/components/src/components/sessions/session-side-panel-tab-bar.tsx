@@ -222,11 +222,12 @@ export const SessionSidePanelTabBar = memo(function SessionSidePanelTabBar({
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    if (!viewport) return undefined;
 
     const handleWheel = (event: WheelEvent) => {
       // Keep native horizontal gestures and browser zoom intact.
-      if (event.defaultPrevented || event.ctrlKey || event.deltaX !== 0 || event.deltaY === 0) return;
+      if (event.defaultPrevented || event.ctrlKey || event.deltaX !== 0 || event.deltaY === 0)
+        return;
 
       const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
       if (maxScrollLeft <= 0) return;
